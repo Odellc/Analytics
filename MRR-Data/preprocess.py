@@ -14,7 +14,8 @@ df = pd.read_csv(os.path.join(de_path, "CustomerMRRChange2021.csv"))
 def main():
 
     for i, r in df.iterrows():
-        print(i, r)
+        print(i, r["Subscription ID"])
+        print(i, r["Current MRR"])
         sys.exit()
 
 
