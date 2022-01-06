@@ -10,7 +10,6 @@ de_path = os.path.join(home,"OneDrive - Gtmhub Ltd", "Analytics", "Data Engineer
 
 df = pd.read_csv(os.path.join(de_path, "CustomerMRRChange2021.csv"))
 
-
 def main():
 
     for i, r in df.iterrows():
