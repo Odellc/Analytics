@@ -17,7 +17,6 @@ def main():
         print(i, r["Current MRR"])
         sys.exit()
 
-
 if __name__ == '__main__':
 
     main()
