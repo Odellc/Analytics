@@ -1,18 +1,22 @@
 import os
 import numpy as np
-import matplotlib.pylot as plt
-import pandas as od
+import matplotlib as plt
+import pandas as pd
 
 
 THIS_DIRECTORY_PATH = os.path.dirname(os.path.abspath(__file__))
-ABS_PATH = os.sep.join(os.path.abspath(__file__).split(os.sep)[:-2])
-print(ABS_PATH)
+os.chdir("../..")
 
-data_path = os.path.join(os.curdir, )
+# ABS_PATH = os.sep.join(os.path.abspath(__file__).split(os.sep)[:-2])
+# print(ABS_PATH)
 
-dataset = pd.read_csv()
+data_path = os.path.join(os.curdir,"Machine Learning A-Z (Codes and Datasets)","Data", "preproecssing" )
+print(data_path)
+dataset = pd.read_csv(os.path.join(data_path,"Data.csv"))
+# print(dataset)
 
-
+def main():
+    pass
 
 
 if __name__ == "__main__":
