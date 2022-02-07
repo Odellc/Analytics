@@ -12,7 +12,7 @@ os.chdir("../..")
 
 data_path = os.path.join(os.curdir,"Machine Learning A-Z (Codes and Datasets)","Data", "preproecssing" )
 print(data_path)
-dataset = pd.read_csv(os.path.join(data_path,"Data.csv"))
+# dataset = pd.read_csv(os.path.join(data_path,"Data.csv"))
 # print(dataset)
 
 def main():
