@@ -17,7 +17,6 @@ ABS_PATH = os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
 # A(x + 3) => first row of data
 # A(y) => (blank row) 
 
-
 def main():
     path = os.path.join("event_segmentation_2021_quarterly_DL", "grouped_by_account")
 
