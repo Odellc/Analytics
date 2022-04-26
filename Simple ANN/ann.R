@@ -20,9 +20,11 @@ split = sample.split(dataset$Exited, SplitRatio = 0.8)
 training_set = subset(dataset, split == TRUE)
 test_set = subset(dataset, split == FALSE)
 
+
 # Feature Scaling
 training_set[-11] = scale(training_set[-11])
 test_set[-11] = scale(test_set[-11])
+
 
 # Fitting ANN to the Training set
 # install.packages('h2o')
