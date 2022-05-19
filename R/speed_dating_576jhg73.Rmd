@@ -1,0 +1,436 @@
+---
+title: "Speed Dating EDA + Analysis"
+author: '#576jhg73'
+output: 
+  html_document:
+    code_folding : show
+    toc: true
+    theme: sandstone
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load("dplyr", "data.table", "readr", "corrplot", "tidyr", "factoextra", "ggplot2", "formattable")
+# Use viridis color throughout
+scale_colour_continuous <- scale_colour_viridis_c
+scale_colour_discrete   <- scale_colour_viridis_d
+scale_colour_binned     <- scale_colour_viridis_b
+
+```
+
+
+
+## Inital Steps {.tabset}
+
+The supplied data has many columns with potential scope for a variety of analytical techniques. To keep the analysis exercise brief as requested, I took the following steps which I will walk through in the below report. 
+
+**My thought process and EDA are stroed in tabs so it is easier to skip straight to the analysis section if required.**
+
+1. Read through the `speedDatingKey.pdf` and identify areas and supporting columns that initially sparked my interest.
+2. Formulate 2-3 loose hypothesis I would like to investigate. 
+3. Basic Exploratory Data Analysis on a selection of columns identified in step 2.
+4. Pick a hypothesis and techniques required to achieve analysis.
+5. Build out analysis 
+6. Final commentary.
+
+### Hypothesis Drafts
+
+Potential areas to look at (bolded are the ones I chose to take through to eda)
+ 
+* **Do opinions change pre and post dating session?**
+* **Are people more likely to match with people of same age?**
+* Do more matches get made at end of night on dates at the start vs the end of the session?
+* What is the correlation between same field of study and matches?
+* What is the trend between matches made and sessions marked with limited to choice? 
+* Do more matches get made around valentines day? (Extract data from wave table in key)
+* **Are the speed daters who look for similar attributes on a date more likely to match??**
+* Do males and females value different attributes?
+
+### PDF Key review 
+
+* Information about the dating session itself (who, when, where )
+* Opinion on the opposite person on each date (attr_o ) - Corresponds to scorecard
+* Information directly about the individual (demographics)
+* Questionnaire pre-dating session 
+  * Opinion on the opposite sex (attr1_1). N.B. Irregular scoring method for waves 6-9.
+  * Opinion on what the individual thinks other attendees look for in opposite sex (attr4_1)
+  * Opinion on what the individual thinks the opposite sex look for (attr2_1).
+  * Opinion on own attributes (attr3_1)
+  * Opinion on how individuals think others perceive them (attr5_1)
+* Questionnaire half way through session (attr1_s) (attr3_s) 
+* Questionnaire a day after dating       (attr7_2) (attr1_2) (attr4_2) (att2_2)  (attr3_2) (attr5_2)
+* Questionnaire  Post dating             (attr1_3) (attr7_3) (attr4_3) (attr2_3) (attr3_3) (attr5_3)
+
+
+## EDA and hypothesis refinement {.tabset}
+
+### Load Data
+```{r echo = FALSE}
+# Load data
+
+speed_data <- data.table::fread("SpeedDating.csv") %>% 
+  as_tibble()
+
+print(paste("Reading data...\n", nrow(speed_data), " rows and", ncol(speed_data), " columns succesfully read in!"))
+```
+
+Refine the `r ncol(speed_data)` columns to those of interest.
+
+```{r}
+speed_data <- speed_data %>% 
+  select(iid, gender, age, pid, match, age_o, wave,   # Demographic Columns
+         ends_with("1_1"),                            # Pre-dating Questions
+         ends_with("1_3")                             # Post-dating questions
+         )
+formattable(head(speed_data))
+
+```
+
+### Gender split {.active}
+
+Data has 1 row for each date with the same questionnaire answers duplicated across rows. 
+For some calculations it is necessary to reduce number of rows to 1 per iid.
+
+```{r}
+speed_data %>% 
+  select(iid, gender) %>% 
+  group_by(iid, gender) %>% 
+  unique()  %>% 
+  group_by(gender) %>% 
+  tally() %>% 
+  formattable()
+
+```
+
+### Matches 
+How many matches are made/not made?
+
+```{r}
+speed_data %>% 
+  select(iid, match) %>% 
+  group_by(iid) %>% 
+  unique() %>% 
+  group_by(match) %>% 
+  tally %>% 
+  formattable()
+
+```
+
+### Pre-questionaire data clean
+
+Check missing values in pre/ post dating questionnaire.  Of the `r nrow(speed_data)` entries we would only loose ~120 so we can either choose to impute a mean or just drop. Also important to remember that some waves were recorded on a 10 point scale and others on a 100.
+```{r}
+speed_data %>% 
+  select(ends_with("1_1")) %>% 
+  summary()
+
+```
+
+```{r echo = FALSE}
+nrow_waves_6_9 <- speed_data %>% 
+    select(wave, ends_with("1_1")) %>%
+  filter(wave %in% 6:9) %>% 
+  nrow()
+```
+
+Waves 6, 7, 8, 9 make up `r round(nrow_waves_6_9/nrow(speed_data)*100, 2)`% of the data. I would consider this a small enough percentage to drop from analysis rather than taking the time to impute it onto the same scale as the other waves. 
+Also important to remember that questionnaire answers are duplicated for each iid over each speed date, so once reduced this number will be far less
+
+
+
+```{r}
+speed_data <- speed_data %>% 
+  filter(!wave %in% 6:9) 
+
+speed_data %>% 
+  select(iid, ends_with("1_1")) %>% 
+  group_by(iid) %>% 
+  unique() %>% 
+  summary()
+
+```
+
+
+### Pre-questionaire columns
+
+Next I looked at the post-dating questions. Looks like the majority of attendees didn't bother to answer the follow up questions. Due to the large amount of missing data I chose to discard the idea to look at opinion change pre/post dating. 
+
+```{r}
+speed_data %>% 
+  select(ends_with("1_3")) %>% 
+  summary()
+
+```
+```{r}
+# Drop post analysis question columns
+speed_data <- speed_data %>% 
+  select(-ends_with("1_3")) 
+
+```
+
+### Check age columns 
+
+Nothing too alarming in age apart from 1 or 2 outlines
+
+
+```{r}
+
+age_summary <- speed_data %>% 
+  select(iid, age, gender) %>% 
+  group_by(iid) %>%  
+  unique() %>% 
+  group_by(age, gender) %>%
+  count(age, gender) %>% 
+  mutate(gender = factor(gender, levels = c("0", "1"), labels = c("F", "M"))) %>% 
+  ungroup() %>% 
+  drop_na()
+
+ggplot() + 
+  geom_bar(data = filter(age_summary, gender == "F"), stat = "identity", aes(x = age, y = n, fill = gender) ) +
+  geom_bar(data = filter(age_summary, gender == "M"), stat = "identity", aes(x = age, y = n*-1, fill = gender) ) +
+  scale_y_continuous(breaks = seq(-300, 300, 100), labels = c(300, 200, 100, 0, 100, 200, 300)) + 
+  coord_flip() +
+  theme_minimal()+
+  ggtitle("Distribution of age across daters")+
+  scale_fill_viridis_d()
+
+```
+### Age difference
+
+Majority of dates are within 5 years of age of each other.
+
+```{r}
+
+speed_data %>% 
+  select(age, age_o) %>% 
+  mutate(age_diff = abs(age -age_o)) %>% 
+  drop_na() %>% 
+  ggplot(aes(age_diff))+
+  geom_histogram(bins = 30)
+```
+
+---
+
+## Hypothesis Selection {.tabset}
+
+Based on the above eda and the brief I decided to look into the following hypothesis 
+
+>  **Are the speed daters who look for similar attributes on a date more likely to match?**
+
+
+This problem lends itself nicely to carry out cluster analysis on the data and then use the results of the clustering to answer the above
+
+
+## The analysis  {.tabset}
+
+We will cluster on the pre-dating questionnaire answers and then join back onto the original data to identify any statistical significance with matches made.
+
+NB. In the cleaning step we have already reduced the number of columns and removed waves 6 to 9.
+
+```{r}
+cluster_data <-  speed_data %>% 
+  select(iid, ends_with("1_1")) %>%
+  group_by(iid) %>% 
+  unique() %>% # Get unique row for each candidate
+  ungroup() %>% 
+  drop_na()  # only 9 rows with missing data so drop
+
+summary(cluster_data)
+```
+
+```{r}
+corr_values <-  cor(select(cluster_data, -iid))
+head(round(corr_values, 2)) %>% 
+  corrplot::corrplot(method="circle",  diag = FALSE, col = viridis::inferno(n = 6), tl.col = "black")
+
+
+```
+
+In the above plot it makes sense to see correlations between some of the attributes. Eg Strong negative correlation between individuals who value attractiveness vs sincerity. Opposed to positively correlated attributes such as ambition and shared interests.  
+
+## K-means
+
+For a standard cluster analysis using K-means you can find an optimal number of clusters through trial and error or use a  plot to visualize the optimal number of clusters. Here I have chosen the elbow method/within sum squares. We are looking for a kink in the curve to pick the number of clusters. This kink identifies the set of clusters that explains the "most" variance in the data
+
+```{r}
+cluster_data %>% 
+  select(-iid) %>% 
+ # scale() %>%  # No need to scale as all data points already on same scoring scale
+  factoextra::fviz_nbclust(FUNcluster = kmeans, method = "wss", verbose = TRUE)
+```
+
+This method can be subjective but the kink in this plot is clearly at 2. Despite better judgment and in an attempt to make my analysis more interesting I chose 3 clusters based on the above plot.
+
+```{r}
+set.seed(123)
+km_result <- cluster_data %>% 
+  select(-iid) %>%
+  scale() %>% 
+  kmeans(centers = 3, nstart = 25) # 25 random starts to try
+
+
+```
+
+
+
+## What do our Clusters looke like?
+
+One slightly smaller cluster than the others. This cluster imbalance is likely caused by outlines and potentially a poor selection for the number of centers required. Maybe 2 would have been a better selection by looking at the chart above?
+
+
+```{r}
+km_result$size
+km_result$centers
+```
+
+
+
+Taking a look at the cluster dimentionality across all features to see how the different clusters overlap. Quite a lot of overlap between clusters 2 & 3 - again potentially indicating we should re-evaluate the number of clusters supplied to k-means. Also if I had more time it would be interesting to look into match rate between these 2 clusters.
+
+````{r}
+factoextra::fviz_cluster(km_result, data = cluster_data, main = "Cluster Dimensions")
+
+```
+
+The below plot looks at the attractiveness and intelligence scores split by gender. It a one-dimensional representation of the above plot
+
+```{r}
+ggplot2::ggplot(data = cbind(cluster_data, cluster = km_result$cluster), aes(attr1_1, intel1_1, col = factor(cluster))) +
+  geom_point(position = "jitter") +
+  ggtitle("Attractive vs Intelligence Score") +
+  scale_color_viridis_d("Cluster")
+```
+
+
+I now want to build up a picture of who sits within my cluster by rejoining with my original data
+
+Plotting the clusters centers reveals the nature of each cluster. 
+
+1. Cluster 1: Rates attractiveness highly above all other attributes
+2. Cluster 2: Rate shared interests and sincerity
+3. Cluster 3: Rates Fun and intelligence
+
+```{r}
+centers <- as.data.frame(t(km_result$centers))
+
+centers %>% 
+  mutate(Symbol = row.names(.)) %>% 
+  pivot_longer(-Symbol, names_to = "Cluster", values_to = "Mean") %>% 
+  mutate(Cluster = factor(Cluster),
+         Color = Mean > 0) %>% 
+  ggplot(aes(Symbol, Mean, fill = Color))+
+  geom_bar(stat= "identity", position = "identity", width = .75) +
+  facet_grid(Cluster ~ . , scale = "free_y") +
+  scale_fill_viridis_d()
+
+
+```
+
+
+```{r echo = FALSE}
+# Code to conditionally color table cells based on value
+avg_formatter <- 
+  formatter("span", 
+            style = x ~ style(
+              font.weight = "bold", 
+              color = ifelse(x > (mean(x)+1), "#FDE725FF", ifelse(x < (mean(x)-1), "#440154FF", "grey"))))
+
+```
+
+```{r}
+cluster_allocation <- cluster_data %>%  
+  cbind(cluster = km_result$cluster) 
+
+cluster_allocation %>% 
+  mutate(cluster = factor(cluster)) %>% 
+  group_by(cluster) %>% 
+  summarise(cluster_size = n(),
+             across(ends_with("_1"), mean)
+            ) %>% 
+  mutate(across(ends_with("1_1"))) %>% 
+  formattable(list(`attr1_1` = avg_formatter,
+                   `sinc1_1` = avg_formatter,
+                   `intel1_1` = avg_formatter,
+                   `fun1_1` = avg_formatter,
+                   `amb1_1` = avg_formatter,
+                   `shar1_1` = avg_formatter)
+  )
+
+```
+
+
+Based on the summary of the clusters we below give them more human iterpretable names.
+
+```{r}
+cluster_allocation <- cluster_allocation %>% 
+  mutate(clust_name = case_when(cluster == 1 ~ "Looks-Likers",
+                                cluster == 2 ~ "Sincere-Sharers",
+                                cluster == 3 ~ "Intellegent-Fun-Lovers")) 
+
+```
+
+### Cluster Analysis
+We can now look at the original data to see who matched with who. Were their clusters similar ?
+
+```{r}
+joined_data <- speed_data %>% 
+  filter(match == 1) %>% 
+  left_join(select(cluster_allocation, iid, clust_name), by = "iid") %>% 
+  left_join(select(cluster_allocation, iid, clust_name_match =clust_name), by = c("pid" = "iid")) %>% 
+  mutate(same_cluster = ifelse(clust_name == clust_name_match, TRUE, FALSE)) %>% 
+  filter(!is.na(same_cluster))
+
+joined_data %>% 
+  group_by(same_cluster) %>% 
+  summarise(count = n()) %>% 
+  formattable()
+
+
+```
+
+Looks like our initial hypothesis has been dis-proven! The majority of matches made were between individuals who fell into different clusters. I suspect gender bias is coming to play somewhere here - lets take a closer look.
+
+
+```{r}
+joined_data %>%
+  mutate(gender = factor(gender, levels = c(1, 0), labels = c("male", "female"))) %>%
+  count(clust_name, gender) %>%
+ggplot2::ggplot(aes(clust_name, n, fill = gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  ggtitle("Gender Split between clusters") +
+  scale_fill_viridis_d("Cluster")
+```
+
+Interestingly our Intelligent-Fun-lovers are almost equally split between males and females. I am interested to see if the match rate is higher for this cluster (see below). And then even though we attempted to avoid a gender bias we can see the other 2 clusters have either a high male or high female presence and arguably correspond to characteristics one might think either gender would like score highest for.
+
+
+```{r}
+cluster_counts <- 
+joined_data %>% 
+  group_by(clust_name, same_cluster) %>% 
+  summarise(count = n(), .groups = "keep") 
+formattable(cluster_counts)
+```
+
+
+
+Finally a quick basic t.test to confirm our above findings allow us to conclusively reject or accept our initial hypothesis
+
+```{r}
+
+t.test(cluster_counts$count ~ cluster_counts$same_cluster)
+```
+
+## Final Comments
+
+The above analysis shows quite conclusively that despite the attempt to avoid stereotypes, males and females do look for different attributes in the opposite gender.
+
+
+The table where we see a split between matches by each cluster is interesting. Whilst in the 2 gender dominated categories we see few matches made with same cluster, in the "Intelligent-Fun-Lovers" cluster we see a more balanced gender split and also a higher same cluster match rate. Whilst the majority of these matches are still FALSE, you could conclude when zooming in to just look within this cluster, these individuals are more likely to match with someone who chooses these same attributes in a partner.
+
+However, overall the results of our t.test suggests that there is a difference in means between our 2 match groups thus accepting the alternative hypothesis and rejecting a null hypothesis. Based on the above analysis and plots we can also reject our original hypothesis and state speed daters who look for similar attributes on a date NOT more likely to match. And use our t.test results to recommend an alternative hypothesis such as "opposites attract"!
+
