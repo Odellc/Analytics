@@ -1,0 +1,12 @@
+# Whiteboarding Request Sample
+
+In order to help the research team find Gtmhub users to interview who use the task functionality, the data science and analytics team gathered, transformed, and extracted data on users that met their research criteria.
+
+Select a sample of 250 users who have used the platform for at least 180 days.
+
+Dovetaile research plan [here](https://dovetailapp.com/projects/ /readme).
+
+## Notes
+HubSpot contacts and companies:
+- Contacts come from a separate script, `contacts.py` in the hubspot_tap repository.
+- Companies come from a separate script, `companies.py` in the hubspot_tap repository.
